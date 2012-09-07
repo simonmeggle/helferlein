@@ -31,6 +31,7 @@ my $cfg = Nagios::Config->new(
 die "Unable to parse!"
         if (!$cfg);
 if ($opt_m eq "s") {
+	my $sgroups = $cfg->list_servicegroups;
         foreach my $s ($cfg->list_services) {
                 if ($s->register eq 1) {
                         my $found = 0;
@@ -52,19 +53,32 @@ if ($opt_m eq "s") {
                 }   
         }   
 } elsif ($opt_m eq "h") {
-        foreach my $host ($cfg->list_hosts) {
-                if ($host->register eq 1) {
-                my $found = 0;
-        #               print "Processing " . $s->service_description . "...\n";
-                        if (defined($host->hostgroups)) {
-                                foreach my $hg (@{$host->hostgroups}) {
-                                        if ($hg->{hostgroup_name} =~ m/$pattern/) {$found = 1;} 
-                                }   
-                        }   
-                        print $host->host_name . "\n" if ($found == 0); 
+	my $hostgroups_ref = $cfg->list_hostgroups;
+        foreach my $host_ref ($cfg->list_hosts) {
+                if ($host_ref->register eq 1) {
+                        print $host_ref->host_name . "\n" 
+				if (host_is_member($hostgroups_ref,$host_ref->host_name,0) < 2); 
                 }   
         }   
 } else {
         die "Unknown mode $opt_m (h=host, s=service)!";
+}
+
+sub host_is_member {
+	my ($hostgroups_arr_ref,$hostname, $matchstate) = @_;
+
+	foreach my $har (@{$hostgroups_arr_ref}) {
+		if ($har->hostgroup_name =~ m/$pattern/) {
+			$matchstate++;	
+		}
+		if (defined($har->members)) {
+			if (grep /$hostname/, map {$_->host_name} $har->members) {
+				$matchstate++;
+			}
+		}
+		if (defined($har->hostgroup_members)) {
+			return (host_is_member($har->hostgroup_members,$hostname,$matchstate)) 
+		};
+	}
 }
 
