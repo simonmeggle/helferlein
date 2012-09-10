@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-#use strict;
+use strict;
 use Nagios::Config;
 use Nagios::Object;
 use Getopt::Std;
@@ -56,29 +56,38 @@ if ($opt_m eq "s") {
 	my $hostgroups_ref = $cfg->list_hostgroups;
         foreach my $host_ref ($cfg->list_hosts) {
                 if ($host_ref->register eq 1) {
-                        print $host_ref->host_name . "\n" 
-				if (host_is_member($hostgroups_ref,$host_ref->host_name,0) < 2); 
+			my $res = 0;
+			foreach (@$hostgroups_ref) {
+				$res = host_is_member_of_group($_,$host_ref->host_name,0);
+				last if $res;
+			}
+			print $host_ref->host_name . "\n" 
+				if (! $res);
                 }   
         }   
 } else {
         die "Unknown mode $opt_m (h=host, s=service)!";
 }
+	
+sub host_is_member_of_group {
+	# $A = Host is member
+	# $B = Group matches pattern
 
-sub host_is_member {
-	my ($hostgroups_arr_ref,$hostname, $matchstate) = @_;
-
-	foreach my $har (@{$hostgroups_arr_ref}) {
-		if ($har->hostgroup_name =~ m/$pattern/) {
-			$matchstate++;	
-		}
-		if (defined($har->members)) {
-			if (grep /$hostname/, map {$_->host_name} $har->members) {
-				$matchstate++;
-			}
-		}
-		if (defined($har->hostgroup_members)) {
-			return (host_is_member($har->hostgroup_members,$hostname,$matchstate)) 
-		};
+	my ($hg_ref,$hostname,$B) = @_;
+	my $A = 0;
+	if (($hg_ref->hostgroup_name =~ m/$pattern/)) {
+		$B = 1; 	
 	}
+	if (defined($hg_ref->members)) {
+		if (grep /$hostname/, map {$_->host_name} @{$hg_ref->members}) {
+			$A = 1; 
+		}
+	}
+	if (defined($hg_ref->hostgroup_members)) {
+		($A = 1) if (grep /1/, map { host_is_member_of_group($_,$hostname,$B)} @{$hg_ref->hostgroup_members});
+	};
+	
+	my $ret = ($B && $A) ;
+	return $ret;
 }
 
